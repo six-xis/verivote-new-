@@ -63,6 +63,40 @@ class ElectionResponse(StrictSchema):
     election: Election
 
 
+class CandidatePublicSummary(StrictSchema):
+    id: str
+    election_id: str
+    electionId: str
+    name: str
+    description: str | None = None
+    index: int
+
+
+class ElectionPublicSummary(StrictSchema):
+    id: str
+    election_id: str
+    election_id_hash: str
+    title: str
+    description: str | None = None
+    status: str
+    candidate_count: int
+    eligibility_root: str | None = None
+    created_at: str
+    createdAt: str
+
+
+class ElectionPublicDetail(ElectionPublicSummary):
+    candidates: list[CandidatePublicSummary]
+
+
+class ElectionListResponse(StrictSchema):
+    elections: list[ElectionPublicSummary]
+
+
+class ElectionDetailResponse(StrictSchema):
+    election: ElectionPublicDetail
+
+
 class CreateCandidateRequest(StrictSchema):
     name: str = Field(min_length=1)
     description: str = ""
@@ -93,6 +127,26 @@ class LegacyCastBallotResponse(StrictSchema):
     receipt_chain_hash: str
     message: str
     ballot: LegacyBallot
+
+
+class LegacyVotePublicRequest(StrictSchema):
+    user_id: str = Field(min_length=1)
+    candidate_id: str = Field(min_length=1)
+
+
+class LegacyVotePublicResponse(StrictSchema):
+    vote_id: str
+    voteId: str
+    receipt_code: str
+    receiptCode: str
+    commitment: str
+    receipt_chain_index: int
+    receiptChainIndex: int
+    previous_receipt_code_hash: str | None = None
+    previousReceiptCodeHash: str | None = None
+    receipt_chain_hash: str
+    receiptChainHash: str
+    message: str
 
 
 class CastBallotRequestV2(StrictSchema):

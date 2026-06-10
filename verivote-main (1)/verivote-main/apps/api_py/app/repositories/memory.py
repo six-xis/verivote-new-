@@ -39,6 +39,9 @@ class MemoryRepository:
     def get_election(self, election_id: str) -> Election | None:
         return self.elections.get(election_id)
 
+    def list_elections(self) -> list[Election]:
+        return list(self.elections.values())
+
     def save_candidate(self, candidate: Candidate) -> Candidate:
         self.candidates[candidate.id] = candidate
         return candidate

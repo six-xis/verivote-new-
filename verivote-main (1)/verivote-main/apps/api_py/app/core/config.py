@@ -15,7 +15,14 @@ class Settings(BaseSettings):
     allow_demo_tally_key: bool = True
     allow_mock_verifier: bool = True
     database_url: str = "memory"
-    cors_origins: list[str] = Field(default_factory=lambda: ["*"])
+    cors_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:18340",
+            "http://127.0.0.1:18340",
+        ]
+    )
 
     model_config = SettingsConfigDict(
         env_file=".env",

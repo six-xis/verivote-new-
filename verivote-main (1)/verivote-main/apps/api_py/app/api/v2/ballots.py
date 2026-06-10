@@ -6,6 +6,8 @@ from app.schemas.abp import (
     CastBallotResponseV2,
     LegacyCastBallotRequest,
     LegacyCastBallotResponse,
+    LegacyVotePublicRequest,
+    LegacyVotePublicResponse,
 )
 
 router = APIRouter(tags=["ballots"])
@@ -33,6 +35,40 @@ def legacy_cast_ballot(
         receipt_chain_hash=ballot.receipt_chain_hash,
         message="Legacy/simple cast accepted. This is not the final private ABP cast API.",
         ballot=ballot,
+    )
+
+
+@router.post(
+    "/elections/{election_id}/vote",
+    response_model=LegacyVotePublicResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+def legacy_vote_public(
+    election_id: str,
+    payload: LegacyVotePublicRequest,
+    request: Request,
+) -> LegacyVotePublicResponse:
+    ballot = request.app.state.services.ballots.legacy_cast(
+        election_id=election_id,
+        user_id=payload.user_id,
+        candidate_id=payload.candidate_id,
+    )
+    return LegacyVotePublicResponse(
+        vote_id=ballot.id,
+        voteId=ballot.id,
+        receipt_code=ballot.receipt_code,
+        receiptCode=ballot.receipt_code,
+        commitment=ballot.commitment,
+        receipt_chain_index=ballot.receipt_chain_index,
+        receiptChainIndex=ballot.receipt_chain_index,
+        previous_receipt_code_hash=ballot.previous_receipt_code_hash,
+        previousReceiptCodeHash=ballot.previous_receipt_code_hash,
+        receipt_chain_hash=ballot.receipt_chain_hash,
+        receiptChainHash=ballot.receipt_chain_hash,
+        message=(
+            "Migration-only legacy cast accepted by Python API v2. "
+            "ABP private proof cast remains pending M7 integration."
+        ),
     )
 
 

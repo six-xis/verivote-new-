@@ -35,6 +35,9 @@ class ElectionService:
             raise DomainError(404, "election not found")
         return election
 
+    def list_elections(self) -> list[Election]:
+        return self.repository.list_elections()
+
     def election_id_hash(self, election_id: str) -> str:
         self.require_election(election_id)
         return hash_object("verivote.election_id.v2", {"election_id": election_id})
@@ -62,6 +65,41 @@ class ElectionService:
     def list_candidates(self, election_id: str) -> list[Candidate]:
         self.require_election(election_id)
         return self.repository.list_candidates(election_id)
+
+    def public_candidate_summary(self, election_id: str, candidate: Candidate, index: int) -> dict:
+        return {
+            "id": candidate.id,
+            "election_id": election_id,
+            "electionId": election_id,
+            "name": candidate.name,
+            "description": candidate.description or None,
+            "index": index,
+        }
+
+    def public_election_summary(self, election: Election) -> dict:
+        candidates = self.repository.list_candidates(election.id)
+        return {
+            "id": election.id,
+            "election_id": election.id,
+            "election_id_hash": self.election_id_hash(election.id),
+            "title": election.title,
+            "description": election.description or None,
+            "status": election.status,
+            "candidate_count": len(candidates),
+            "eligibility_root": election.eligibility_root,
+            "created_at": election.created_at,
+            "createdAt": election.created_at,
+        }
+
+    def public_election_detail(self, election_id: str) -> dict:
+        election = self.require_election(election_id)
+        return {
+            **self.public_election_summary(election),
+            "candidates": [
+                self.public_candidate_summary(election.id, candidate, index)
+                for index, candidate in enumerate(self.repository.list_candidates(election.id))
+            ],
+        }
 
     def build_manifest_v2(self, election_id: str) -> ElectionManifestV2:
         election = self.require_election(election_id)

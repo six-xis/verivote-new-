@@ -58,9 +58,14 @@ cd apps/api_py && python -m pytest
 cd apps/api_py && python -m ruff check app
 pnpm.cmd run test:py-api
 pnpm.cmd run lint:py-api
+pnpm.cmd run build:web
 ```
 
 The root `pnpm test` aggregation can time out in the current Windows/Vitest migration environment. If that happens, run the targeted Python commands above and the legacy Node subcommands individually instead of reporting a false aggregate pass.
+
+There is currently no dedicated `lint:web` script or ESLint configuration. Use
+`pnpm.cmd run build:web` for the React/Vite TypeScript build check until a real
+frontend linter is added.
 
 ## Current Python Test Layers
 
@@ -77,6 +82,7 @@ The root `pnpm test` aggregation can time out in the current Windows/Vitest migr
 - `test_private_valid_vote_interface.py`: Phase 5 proof public signal schema, mock verifier guard, and ZK status endpoint.
 - `test_private_valid_vote_real_wrapper.py`: Phase 5 / M6C real verifier artifact detection, status fields, no mock fallback in competition/production, proof schema private-field rejection, and real snarkjs verify behavior.
 - `test_abp_cast_with_proof.py`: Phase 5 `/ballots/cast` proof binding checks and mock proof integration.
+- `test_frontend_v2_integration.py`: frontend-facing Python API v2 list/detail, development CORS, and sanitized migration vote response.
 
 ## ZK Private Valid Vote Commands
 

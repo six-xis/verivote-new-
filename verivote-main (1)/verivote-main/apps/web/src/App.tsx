@@ -7,7 +7,6 @@ import type {
   BlockchainAuditRecord,
   BulletinBoard,
   CastPreparedBallotResponse,
-  CastVoteRequest,
   CastVoteResponse,
   Candidate,
   ChallengePreparedBallotResponse,
@@ -32,8 +31,6 @@ import type {
   PendingBallot,
   PrepareBallotRequest,
   PrepareBallotResponse,
-  RegisterUserRequest,
-  RegisterUserResponse,
   ReceiptChainBreak,
   ReceiptChainRecord,
   RunAggregatorResponse,
@@ -45,9 +42,13 @@ import type {
   ZkValidityVerifyResponse
 } from "@verivote/shared";
 import benchmarkResults from "./data/benchmark-results.json";
+import {
+  apiRequest as apiRequestFromClient,
+  buildApiUrl,
+  getErrorMessage as getApiErrorMessage
+} from "./lib/api";
 import "./styles.css";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:3001";
 const receiptChainExplanation =
   "receipt chain 用于检测正式投票记录的删除、重排或回执链篡改。它不替代 Merkle proof，而是补充公共记录连续性验证。";
 
@@ -89,6 +90,22 @@ type ZkProofMode = "mock" | "real";
 interface ZkProofModeRequest extends ZkValidityProofRequest {
   proofMode: ZkProofMode;
 }
+
+interface DemoRegisterResponseV2 {
+  credential: {
+    id: string;
+    userId: string;
+    createdAt: string;
+  };
+  message: string;
+}
+
+interface LegacyVoteRequestV2 {
+  user_id: string;
+  candidate_id: string;
+}
+
+type PublicCastVoteResponse = Omit<CastVoteResponse, "voteVector">;
 
 type BenchmarkMetricName =
   | "commitmentGenerationMs"
@@ -274,35 +291,11 @@ const capabilityLayers = [
 ];
 
 async function apiRequest<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: options.method ?? "GET",
-    headers:
-      options.body === undefined
-        ? undefined
-        : {
-            "Content-Type": "application/json"
-          },
-    body: options.body === undefined ? undefined : JSON.stringify(options.body)
-  });
-
-  const data = (await response.json().catch(() => null)) as
-    | ApiErrorResponse
-    | T
-    | null;
-
-  if (!response.ok) {
-    const message =
-      data && typeof data === "object" && "error" in data
-        ? data.error
-        : `请求失败 (${response.status})`;
-    throw new Error(message);
-  }
-
-  return data as T;
+  return apiRequestFromClient<T>(path, options);
 }
 
 function getErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "请求失败";
+  return getApiErrorMessage(error);
 }
 
 function formatTime(value: string): string {
@@ -643,29 +636,50 @@ function CreateElectionPage({
 }
 
 function RegisterUserPage({
+  elections,
   title = "用户注册",
   description
 }: {
+  elections: Election[];
   title?: string;
   description?: string;
-} = {}) {
+}) {
+  const [electionId, setElectionId] = useState("");
   const [name, setName] = useState("");
   const [registeredUser, setRegisteredUser] = useState<User | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
+
+  useEffect(() => {
+    if (!electionId && elections.length > 0) {
+      setElectionId(elections[0].id);
+    }
+  }, [electionId, elections]);
 
   async function handleRegister(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setNotice(null);
 
+    if (!electionId) {
+      setNotice({ type: "error", text: "Please create or select an election first." });
+      return;
+    }
+
     try {
-      const body: RegisterUserRequest = { name };
-      const data = await apiRequest<RegisterUserResponse>("/users/register", {
-        method: "POST",
-        body
-      });
+      const userId = name.trim();
+      const data = await apiRequest<DemoRegisterResponseV2>(
+        `/elections/${electionId}/users/demo-register`,
+        {
+          method: "POST",
+          body: { user_id: userId }
+        }
+      );
 
       setName("");
-      setRegisteredUser(data.user);
+      setRegisteredUser({
+        id: data.credential.userId,
+        name: data.credential.userId,
+        createdAt: data.credential.createdAt
+      });
       setNotice({ type: "success", text: "用户注册成功" });
     } catch (error) {
       setNotice({ type: "error", text: getErrorMessage(error) });
@@ -686,6 +700,10 @@ function RegisterUserPage({
       <NoticeMessage notice={notice} />
 
       <form className="panel form narrow" onSubmit={handleRegister}>
+        <label>
+          Election
+          <ElectionSelect elections={elections} value={electionId} onChange={setElectionId} />
+        </label>
         <label>
           用户名
           <input
@@ -714,7 +732,7 @@ function VotePage({ elections }: { elections: Election[] }) {
   const [candidateId, setCandidateId] = useState("");
   const [userId, setUserId] = useState("");
   const [notice, setNotice] = useState<Notice | null>(null);
-  const [receipt, setReceipt] = useState<CastVoteResponse | null>(null);
+  const [receipt, setReceipt] = useState<PublicCastVoteResponse | null>(null);
 
   const candidates = useMemo<Candidate[]>(
     () => detail?.candidates ?? [],
@@ -776,8 +794,8 @@ function VotePage({ elections }: { elections: Election[] }) {
     }
 
     try {
-      const body: CastVoteRequest = { userId, candidateId };
-      const data = await apiRequest<CastVoteResponse>(
+      const body: LegacyVoteRequestV2 = { user_id: userId, candidate_id: candidateId };
+      const data = await apiRequest<PublicCastVoteResponse>(
         `/elections/${electionId}/vote`,
         {
           method: "POST",
@@ -868,12 +886,6 @@ function VotePage({ elections }: { elections: Election[] }) {
             <div>
               <span>receiptChainHash</span>
               <code className="hash-value">{receipt.receiptChainHash}</code>
-            </div>
-            <div>
-              <span>voteVector</span>
-              <code className="hash-value">
-                [{receipt.voteVector.join(", ")}]
-              </code>
             </div>
           </div>
           <p className="receipt-note">
@@ -3945,7 +3957,7 @@ function ArtifactExportPage({ elections }: { elections: Election[] }) {
   async function downloadArtifact(path: string, filename: string) {
     setNotice(null);
     try {
-      const response = await fetch(`${API_BASE_URL}${path}`);
+      const response = await fetch(buildApiUrl(path));
       if (!response.ok) {
         const errorPayload = (await response.json().catch(() => null)) as
           | ApiErrorResponse
@@ -4168,6 +4180,7 @@ export function App() {
             ) : null}
             {view === "register" ? (
               <RegisterUserPage
+                elections={elections}
                 title={portalLabels[activePortal].registerTitle}
                 description={portalLabels[activePortal].registerLead}
               />

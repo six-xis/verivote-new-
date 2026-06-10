@@ -7,16 +7,20 @@ The Python/FastAPI backend in `apps/api_py` is the primary backend for ABP v2 wo
 - `GET /health`
 - `GET /api/v1/legacy/health`
 - `GET /api/v2/health`
+- `GET /api/v2/elections`
 - `POST /api/v2/elections`
+- `GET /api/v2/elections/{election_id}`
 - `POST /api/v2/elections/{election_id}/candidates`
 - `POST /api/v2/elections/{election_id}/users/demo-register`
 - `POST /api/v2/elections/{election_id}/credentials/demo-issue`
 - `GET /api/v2/elections/{election_id}/credentials/public`
 - `POST /api/v2/elections/{election_id}/credentials/derive-nullifier`
 - `POST /api/v2/elections/{election_id}/ballots/legacy-cast`
+- `POST /api/v2/elections/{election_id}/vote`
 - `POST /api/v2/elections/{election_id}/ballots/cast`
 - `GET /api/v2/elections/{election_id}/bulletin-board`
 - `GET /api/v2/elections/{election_id}/audit/report`
+- `GET /api/v2/elections/{election_id}/result`
 - `GET /api/v2/zk/private-valid-vote/status`
 - `POST /api/v2/attacks/elections/{election_id}/tamper-commitment`
 - `POST /api/v2/attacks/elections/{election_id}/inject-duplicate`
@@ -42,6 +46,17 @@ These models are defined in `apps/api_py/app/models/abp.py` and exposed through 
 `POST /api/v2/elections/{election_id}/ballots/legacy-cast` is a migration endpoint. It exists so the Python backend can keep a working health/basic-flow/attack-detection baseline while ABP v2 is built.
 
 It is not the final privacy-preserving cast endpoint.
+
+`POST /api/v2/elections/{election_id}/vote` is a frontend migration adapter over
+the same baseline flow. Its response is sanitized for UI use and does not return
+`candidate_id`, `vote_vector`, `randomness`, `credential_secret`, or a full
+`sealed_vote_package`. M7 is still required before the frontend cast flow is
+connected to a real private valid vote proof.
+
+`GET /api/v2/elections` and `GET /api/v2/elections/{election_id}` are public
+frontend support endpoints. They return election summaries/details and
+candidates by public `id` only; they do not return credentials, sealed vote
+packages, or cast ballot openings.
 
 ## ABP V2 Demo Credentials
 

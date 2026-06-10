@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "pnpm -r --parallel dev",
     "dev:web": "pnpm --filter @verivote/web dev",
+    "build:web": "pnpm --filter @verivote/web build",
     "dev:api": "pnpm --filter @verivote/api dev",
     "dev:api-py": "cd apps/api_py && python -m uvicorn app.main:create_app --factory --reload",
     "test": "pnpm run test:api && pnpm run test:crypto && pnpm run test:zk && pnpm run test:contract",
