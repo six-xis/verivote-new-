@@ -1,0 +1,2 @@
+"""Legacy API compatibility routers."""
+

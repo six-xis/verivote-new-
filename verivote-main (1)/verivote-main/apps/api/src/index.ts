@@ -109,6 +109,8 @@ interface ApiZkValidityVerifyRequest extends ZkValidityVerifyRequest {
 const app = express();
 const port = Number(process.env.PORT ?? 3001);
 
+export { app };
+
 const users: User[] = [];
 const elections: Election[] = [];
 const candidates: Candidate[] = [];
@@ -2621,7 +2623,9 @@ async function bootstrap(): Promise<void> {
   });
 }
 
-bootstrap().catch((error) => {
-  console.error(error);
-  process.exit(1);
-});
+if (process.env.VERIVOTE_SKIP_BOOTSTRAP !== "1") {
+  bootstrap().catch((error) => {
+    console.error(error);
+    process.exit(1);
+  });
+}

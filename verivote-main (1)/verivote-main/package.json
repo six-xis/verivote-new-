@@ -7,6 +7,14 @@
     "dev": "pnpm -r --parallel dev",
     "dev:web": "pnpm --filter @verivote/web dev",
     "dev:api": "pnpm --filter @verivote/api dev",
+    "dev:api-py": "cd apps/api_py && python -m uvicorn app.main:create_app --factory --reload",
+    "test": "pnpm run test:api && pnpm run test:crypto && pnpm run test:zk && pnpm run test:contract",
+    "test:py-api": "cd apps/api_py && python -m pytest",
+    "lint:py-api": "cd apps/api_py && python -m ruff check app",
+    "test:api": "vitest run --reporter verbose",
+    "test:crypto": "pnpm --filter @verivote/crypto typecheck",
+    "test:zk": "pnpm --filter @verivote/zk typecheck",
+    "test:contract": "pnpm --filter @verivote/contracts test",
     "build": "pnpm -r --workspace-concurrency=1 build",
     "typecheck": "pnpm -r typecheck",
     "benchmark": "tsx scripts/benchmark.ts",
@@ -18,8 +26,13 @@
     "contract:deploy": "pnpm --filter @verivote/contracts run deploy"
   },
   "devDependencies": {
+    "@types/supertest": "^6.0.3",
+    "circomlib": "^2.0.5",
+    "circomlibjs": "^0.1.7",
     "snarkjs": "^0.7.6",
+    "supertest": "^7.1.4",
     "tsx": "^4.21.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^4.0.15"
   }
 }
