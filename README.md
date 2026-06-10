@@ -1,517 +1,1033 @@
-# -
-投票
-# VeriVote
+# VeriVote-ABP
 
-隐私保护可验证电子投票与审计平台
+**Audit-Bound Partition Proof for Privacy-Preserving, Publicly Auditable Electronic Voting**
 
-## 1. 项目简介
+VeriVote-ABP 是一个面向低信任组织场景的隐私保护、可验证、可审计电子投票系统。项目目标不是做一个普通投票网站，而是构建一个围绕 **资格凭证、隐私投票、公开公告板、零知识合法性证明、审计绑定和后续链上验证** 的研究型安全系统原型。
 
-VeriVote 是一个面向高校、社团、企业内部投票等低信任组织场景的隐私保护可验证电子投票系统。
+当前版本已经从早期 TypeScript/Express demo 迁移到以 **Python/FastAPI** 为主后端的 ABP v2 架构，并完成了真实 `private_valid_vote` Circom/snarkjs/Groth16 证明流水线的最小可运行版本。
 
-它不是一个简单投票网站，而是围绕投票主流程、公开验证、聚合审计、链上留痕和 ZK 合法性证明构建的可验证审计平台。当前系统把以下能力放在一个可运行、可演示、可继续扩展的 TypeScript 工程中：
+> 当前项目仍处于比赛原型和研究工程阶段。部分模块使用 demo/reference/unsafe setup，不能直接视为生产级电子投票系统。
 
-- 投票主流程
-- `commitment` / `receiptCode`
-- `receipt chain`
-- 公告板 Bulletin Board
-- Merkle Root / Merkle Proof
-- 聚合器 Aggregator
-- 审计报告
-- 异常 / 攻击检测
-- Hardhat 链上审计
-- Benchmark 性能评估
-- Mock / Real ZK 合法性证明
-- cast-or-challenge 挑战审计
+---
 
-VeriVote 的定位是比赛原型与研究型工程实现：优先把可验证投票的关键机制做成可以实际操作、可以解释、可以被审计的系统，而不是声称完整复现任何一篇论文或生产级电子投票系统。
+## 目录
 
-## 2. 项目当前状态
+* [项目定位](#项目定位)
+* [当前完成状态](#当前完成状态)
+* [核心能力](#核心能力)
+* [系统架构](#系统架构)
+* [目录结构](#目录结构)
+* [快速开始](#快速开始)
+* [Python/FastAPI 主后端](#pythonfastapi-主后端)
+* [ABP v2 投票流程](#abp-v2-投票流程)
+* [Private Valid Vote ZK Proof](#private-valid-vote-zk-proof)
+* [API 概览](#api-概览)
+* [测试与验证](#测试与验证)
+* [ZK 本地运行命令](#zk-本地运行命令)
+* [安全边界与当前限制](#安全边界与当前限制)
+* [后续路线图](#后续路线图)
+* [相关文档](#相关文档)
 
-当前已经完成：
+---
 
-- TypeScript monorepo 项目结构
-- React / Vite 前端
-- Node.js / Express API 后端
-- 投票端 / 审计管理端双门户 UI
-- 创建投票
-- 添加候选人
-- 用户注册
-- 投票
-- 回执查询
-- 查看结果
-- `commitment` / `receiptCode`
-- `receipt chain` 连续性验证
-- 公告板
-- Merkle Root / Merkle Proof
-- 聚合器
-- 审计报告
-- 异常 / 攻击检测实验室
-- Hardhat 智能合约链上审计
-- Benchmark 性能评估页面
-- Mock ZK validity proof
-- Real Groth16 ZK proof
-- cast-or-challenge 挑战审计
+## 项目定位
 
-## 3. 双门户设计
-
-当前前端 UI 已整理成两个入口：投票端和审计管理端。这样可以让普通用户先看到简单投票流程，也让评委、审计员和开发者集中查看安全机制、密码学验证和工程审计能力。
-
-### 投票端 Voter Portal
-
-面向普通投票用户，包含：
-
-- 用户注册 / 身份登记
-- 投票
-- 回执查询
-- 查看结果
-- Merkle 验证 / 我的验证
-
-特点：
-
-- 低门槛
-- 简洁
-- 面向普通用户
-- 不暴露过多密码学细节
-
-### 审计管理端 Admin & Audit Console
-
-面向管理员、审计员、评委和开发者，包含：
-
-- 创建投票
-- 用户管理
-- 公告板
-- 聚合器
-- 审计报告
-- 异常 / 攻击检测
-- 链上审计
-- ZK 验证
-- 性能评估
-- 挑战审计
-
-特点：
-
-- 展示安全机制
-- 展示密码学能力
-- 展示审计流程
-- 展示攻击检测和性能数据
-
-## 4. 与三篇论文的关系
-
-VeriVote 采用“论文机制融合 + 工程系统实现”的路线，并不是对三篇论文的逐字复现。项目会持续区分三类内容：
-
-- 论文原版机制
-- 当前工程实现
-- 后续增强方向
-
-### 613 / Haechi 方向
-
-当前项目吸收：
-
-- `voteVector`
-- `commitment`
-- `receiptCode`
-- `receipt chain`
-- Bulletin Board
-- cast-or-challenge
-- challenge opening verification
-- tally consistency 思想
-
-当前实现边界：
-
-- 主流程仍使用 SHA-256 风格的 hash commitment。
-- Pedersen-style vector commitment 将作为后续增强模块，不直接替换当前主流程。
-- 当前 cast-or-challenge 是工程化演示，用于展示挑战审计思想，不是完整 Haechi 复现。
-
-### 565 / Zeeperio 方向
-
-当前项目吸收：
-
-- public audit
-- `proofHash` / `auditHash`
-- 链上审计摘要
-- Hardhat smart contract audit
-- Real Groth16 ZK proof
-
-当前实现边界：
-
-- 当前 Real ZK 证明的是单张 `voteVector` 的 one-hot 合法性。
-- 尚未实现完整 tally correctness proof。
-- 尚未实现链上 ZK verifier。
-- 链上审计保存的是摘要，不是明文选票。
-
-### 545 / Aggios 方向
-
-当前项目吸收：
-
-- Aggregator
-- `voteTokenHash`
-- duplicate detection
-- invalid vote detection
-- batch tally
-- audit report
-
-当前实现边界：
-
-- 当前 Aggregator 是工程化聚合审计模块。
-- 尚未实现完整 Extended Partition Argument。
-- 尚未实现完整密码学聚合证明。
-
-## 5. 与朋友项目的融合关系
-
-朋友项目是一个偏 `613 / Haechi` 的 Python 原型，包含：
-
-- `prepare -> cast/challenge`
-- Pedersen 风格向量承诺
-- confirmation code chain
-- public election record
-- verifier
-- security tests
-- Zeeperio-style artifact export
-
-VeriVote 没有直接复制朋友项目代码，而是吸收机制思想并用 TypeScript 重写。这样可以保持当前 React / Vite / Express / Circom / Hardhat 架构一致，也避免把参考原型的 Python 数据模型直接混入主项目。
-
-当前已融合：
-
-- cast-or-challenge 挑战审计
-- receipt chain / confirmation code chain 思想
-- 双门户 UI 结构
-
-后续计划融合：
-
-- Pedersen-style commitment 实验模块
-- `SECURITY_TESTS.md` 安全测试矩阵
-- Zeeperio-style artifact export
-
-## 6. 核心技术亮点
-
-### 1. 多层可验证审计
-
-- `receipt chain` 验证正式投票记录连续性。
-- Merkle proof 验证单票包含性。
-- Aggregator 验证聚合统计一致性。
-- Hardhat 链上审计锚定最终摘要。
-
-### 2. ZK 合法性证明
-
-- Mock 模式用于快速演示。
-- Real 模式基于 Circom / snarkjs / Groth16。
-- 当前证明 `voteVector` 是 one-hot 向量。
-- 合法票通过，非法票失败。
-
-### 3. cast-or-challenge 挑战审计
-
-- prepare pending ballot。
-- cast 后计入正式投票。
-- challenge 后公开 opening，不计入 tally。
-- 用于证明 commitment 按用户选择生成。
-
-### 4. 聚合器审计
-
-- `voteTokenHash`
-- `duplicateVotes`
-- `invalidVotes`
-- tally consistency
-- `auditHash`
-
-### 5. 链上审计
-
-- 提交 `merkleRoot`、`commitmentRoot`、`receiptRoot`、`auditHash`、`tallyHash`。
-- 展示 `transactionHash` 和 `contractAddress`。
-- 支持本地 Hardhat 链验证。
-
-### 6. 性能评估
-
-- benchmark 脚本。
-- 性能评估页面。
-- 100 / 1000 / 5000 / 10000 votes 测试。
-
-## 7. 技术栈
-
-- TypeScript
-- React
-- Vite
-- Node.js API / Express
-- pnpm workspace
-- Circom 2
-- snarkjs
-- Groth16
-- Hardhat
-- Solidity
-- PowerShell / Windows 本地开发环境
-
-## 8. 项目结构
-
-主要目录：
-
-- `apps/api`：后端 API。
-- `apps/web`：前端 Web。
-- `packages/crypto`：哈希、commitment、Merkle、receipt chain 等工具。
-- `packages/shared`：前后端共享 TypeScript 类型。
-- `packages/zk`：Mock / Real ZK proof adapter。
-- `contracts`：Hardhat / Solidity 链上审计合约。
-- `circuits`：Circom 电路。
-- `scripts`：benchmark、ZK setup、ZK demo 等脚本。
-- `docs`：项目文档、论文映射、ZK、benchmark、融合路线等。
+VeriVote-ABP 的全称是：
 
 ```text
-verivote/
-├─ apps/
-│  ├─ api/
-│  └─ web/
-├─ packages/
-│  ├─ crypto/
-│  ├─ shared/
-│  └─ zk/
-├─ contracts/
-├─ circuits/
-├─ scripts/
-├─ docs/
-├─ package.json
-├─ pnpm-workspace.yaml
-└─ tsconfig.base.json
+VeriVote Audit-Bound Partition Proof
 ```
 
-## 9. 快速开始
+系统核心目标是将电子投票中的多个公开审计对象绑定到统一证明与审计材料中：
 
-安装依赖：
+* `election_id_hash`
+* `manifest_hash`
+* `eligibility_root`
+* `commitment_root`
+* `nullifier_root`
+* `receipt_root`
+* `tally_hash`
+* `audit_bundle_hash`
+
+最终希望形成：
+
+```text
+资格凭证 -> 隐私投票 -> 公告板 -> ZK 合法性证明 -> 审计包 -> 链上绑定
+```
+
+本项目当前重点解决以下问题：
+
+1. 投票内容不应在 cast 阶段明文暴露；
+2. 系统应能公开验证某张票被正确记录；
+3. 同一资格在同一 election 中不能重复投票；
+4. 用户投票合法性应由零知识证明约束；
+5. 审计材料应能被离线复验，并可后续提交链上锚定；
+6. mock/demo/reference 代码必须与真实安全路径清晰区分。
+
+---
+
+## 当前完成状态
+
+截至当前版本，项目已经完成以下阶段。
+
+### M1：Python/FastAPI 主后端迁移
+
+已新增主后端：
+
+```text
+apps/api_py/
+```
+
+原 Node/Express 后端：
+
+```text
+apps/api/
+```
+
+保留为 legacy demo，不再作为新核心功能的主开发对象。
+
+已完成：
+
+* FastAPI 应用入口；
+* API v1/v2 路由结构；
+* service/repository 分层；
+* pytest 测试基线；
+* ruff lint 基线；
+* legacy Node 后端保留。
+
+---
+
+### M2：ABP v2 数据模型
+
+已定义 ABP v2 核心模型：
+
+* `CandidateV2`
+* `ElectionManifestV2`
+* `CredentialV2`
+* `DemoCredentialIssueResponse`
+* `CastBallotRecordV2`
+* `ChallengeBallotRecordV2`
+* `AuditRootsV2`
+* `BatchTallyPublicSignalsV2`
+* `AuditBundleV2`
+
+安全边界：
+
+* `CastBallotRecordV2` 禁止出现：
+
+  * `candidate_id`
+  * `vote_vector`
+  * `randomness`
+* `CredentialV2` 禁止出现：
+
+  * `credential_secret`
+* `BatchTallyPublicSignalsV2` 固定 public signal 顺序，为后续 circuit / Solidity verifier 对齐做准备。
+
+---
+
+### M3：commitmentV2 与 sealedVotePackage
+
+已完成：
+
+* canonical JSON；
+* `field_hash_v2`；
+* `commitmentV2`；
+* vote vector one-hot 校验；
+* `sealedVotePackage`；
+* `sealedVotePackageHash`；
+* AESGCM demo tally encryption；
+* sealed package 不泄露明文 vote vector / randomness。
+
+当前注意事项：
+
+* Python `field_hash_v2` 是 SHA256-to-BN254 reference/demo hash；
+* 它不是最终生产 Poseidon commitment；
+* 真实 ZK circuit 使用 Poseidon profile。
+
+---
+
+### M4：ABP v2 cast ballot API
+
+已完成正式 cast endpoint：
+
+```http
+POST /api/v2/elections/{election_id}/ballots/cast
+```
+
+该接口接收：
+
+* `commitment`
+* `nullifier_hash`
+* `sealed_vote_package`
+* `sealed_vote_package_hash`
+* `receipt_code`
+* `validity_proof_hash`
+* 可选 `validity_proof`
+
+该接口拒绝：
+
+* `candidate_id`
+* `vote_vector`
+* `randomness`
+* `credential_secret`
+
+已完成：
+
+* sealed package hash 重算校验；
+* nullifier 防重复；
+* receipt chain hash 最小实现；
+* bulletin board public projection；
+* public response 不返回完整 sealed package。
+
+---
+
+### M5：eligibilityRoot 与 nullifierHash
+
+已完成资格凭证基础设施：
+
+* `credential_secret`
+* `credential_commitment`
+* `eligibility_root`
+* Merkle proof
+* `nullifier_hash`
+* demo credential issuer
+
+相关 API：
+
+```http
+POST /api/v2/elections/{election_id}/credentials/demo-issue
+GET  /api/v2/elections/{election_id}/credentials/public
+POST /api/v2/elections/{election_id}/credentials/derive-nullifier
+```
+
+安全边界：
+
+* `credential_secret` 只在 demo issue response 中返回；
+* public credentials 不返回 secret；
+* bulletin board 不返回 secret；
+* cast record 不保存 secret；
+* nullifier 由 `election_id_hash + credential_secret` 推导；
+* 同一 election 下相同 nullifier 不能重复 cast。
+
+---
+
+### M6A：Private Valid Vote Proof 接口与 mock guard
+
+已完成：
+
+* `PrivateValidVotePublicSignalsV1`
+* `PrivateValidVoteProofV1`
+* proof public signal 安全边界；
+* mock verifier guard；
+* production / competition 禁止 mock fallback；
+* cast API 可选接入 `validity_proof`；
+* ZK status API。
+
+public signals 固定顺序：
+
+```text
+0 election_id_hash
+1 eligibility_root
+2 nullifier_hash
+3 commitment
+4 rule_hash
+```
+
+public signals 禁止包含：
+
+* `vote_vector`
+* `randomness`
+* `candidate_id`
+* `credential_secret`
+
+---
+
+### M6B/M6C：真实 private_valid_vote Circom/snarkjs/Groth16 pipeline
+
+已完成真实最小 ZK pipeline：
+
+* `circuits/private_valid_vote.circom`
+* `circuits/private_valid_vote_4_8.circom`
+* Poseidon input generator
+* PowerShell build/prove/verify scripts
+* `verification_key.json`
+* `proof.json`
+* `public.json`
+* `witness.wtns`
+* Python real verifier wrapper
+* ZK status artifact detection
+
+真实 pipeline 已跑通：
+
+```text
+build_private_valid_vote.ps1   passed
+prove_private_valid_vote.ps1   passed
+verify_private_valid_vote.ps1  passed
+snarkjs groth16 verify         OK
+```
+
+当前 demo circuit 固定参数：
+
+```text
+candidateCount = 4
+merkleDepth    = 8
+```
+
+电路约束包括：
+
+* vote vector 每项为 0/1；
+* vote vector 之和为 1；
+* `credential_commitment = Poseidon([credential_secret])`；
+* `nullifier_hash = Poseidon([election_id_hash, credential_secret])`；
+* `eligibility_root` 由 credential commitment 和 Merkle path 重新计算；
+* `commitment` 绑定 election、eligibility root、nullifier、rule hash、vote vector、randomness。
+
+---
+
+## 核心能力
+
+### 1. 隐私 cast ballot
+
+正式 cast ballot 不保存明文候选人选择：
+
+```text
+candidate_id  不保存
+vote_vector   不公开
+randomness    不公开
+```
+
+公开记录只包含：
+
+* commitment
+* nullifier hash
+* sealed vote package hash
+* receipt code
+* receipt chain hash
+* proof hash / proof metadata
+
+---
+
+### 2. eligibilityRoot 资格集合
+
+系统使用 credential commitment 构建 election-scoped eligibility Merkle root。
+
+当前 demo issuer 会生成：
+
+```text
+credential_secret
+credential_commitment
+eligibility_root
+```
+
+生产设计中，credential 应由独立资格发行方发放，后端不应持有 voter secret。
+
+---
+
+### 3. nullifier 防重复投票
+
+每个 election 中，用户通过：
+
+```text
+nullifier_hash = H(election_id_hash, credential_secret)
+```
+
+生成 election-scoped nullifier。
+
+同一个 `nullifier_hash` 在同一个 election 中只能 cast 一次。
+
+---
+
+### 4. sealedVotePackage
+
+投票 opening 被封装为 sealed package：
+
+```json
+{
+  "version": "sealed-vote-v1",
+  "algorithm": "AESGCM-SHA256-DEMO",
+  "ciphertext": "...",
+  "nonce": "...",
+  "key_id": "demo",
+  "opening_hash": "...",
+  "created_at": "..."
+}
+```
+
+public response 和 bulletin board 默认只返回：
+
+```text
+sealed_vote_package_hash
+```
+
+不返回完整 sealed package。
+
+---
+
+### 5. Private Valid Vote ZK Proof
+
+真实 Circom 电路使用 Poseidon profile：
+
+```text
+credential_commitment = Poseidon([credential_secret])
+nullifier_hash        = Poseidon([election_id_hash, credential_secret])
+eligibility_root      = Poseidon Merkle root
+commitment            = Poseidon(header_hash, vote_hash, randomness)
+```
+
+public signals：
+
+```text
+election_id_hash
+eligibility_root
+nullifier_hash
+commitment
+rule_hash
+```
+
+private witness：
+
+```text
+vote_vector
+randomness
+credential_secret
+merkle_path_elements
+merkle_path_indices
+```
+
+---
+
+## 系统架构
+
+当前项目采用 monorepo 结构。
+
+```text
+VeriVote-ABP
+├── apps/
+│   ├── api/          # legacy Node/Express backend
+│   ├── api_py/       # primary Python/FastAPI backend
+│   └── web/          # React/Vite frontend
+├── packages/
+│   ├── crypto/       # legacy/shared TypeScript crypto utilities
+│   ├── shared/       # shared TS types
+│   └── zk/           # legacy/mock ZK utilities
+├── circuits/         # Circom circuits and ZK inputs
+├── scripts/
+│   └── zk/           # ZK build/prove/verify scripts
+├── artifacts/
+│   └── zk/
+│       └── private_valid_vote/
+├── contracts/        # Solidity/Hardhat contracts
+├── docs/             # protocol, API, ZK, threat model, roadmap docs
+├── tests/
+├── package.json
+└── pnpm-workspace.yaml
+```
+
+---
+
+## 目录结构
+
+重要目录说明：
+
+| Path                              | 说明                                    |
+| --------------------------------- | ------------------------------------- |
+| `apps/api_py`                     | 当前主后端，基于 Python/FastAPI               |
+| `apps/api`                        | legacy Node/Express demo backend      |
+| `apps/web`                        | React/Vite 前端                         |
+| `circuits`                        | Circom 电路                             |
+| `scripts/zk`                      | ZK input/build/prove/verify 脚本        |
+| `artifacts/zk/private_valid_vote` | 当前 private valid vote proof artifacts |
+| `contracts`                       | Solidity/Hardhat 链上审计合约               |
+| `docs/API_V2.md`                  | Python API v2 文档                      |
+| `docs/VERIVOTE_ABP_SPEC.md`       | ABP v2 协议说明                           |
+| `docs/ZK_PRIVATE_VALID_VOTE.md`   | private valid vote proof 说明           |
+| `docs/THREAT_MODEL_V2.md`         | 当前威胁模型                                |
+| `docs/TESTING.md`                 | 测试命令和环境说明                             |
+
+---
+
+## 快速开始
+
+### 1. 安装 Node 依赖
+
+项目使用 pnpm workspace。
 
 ```bash
 pnpm install
 ```
 
-启动后端：
+Windows PowerShell 下如果 `pnpm.ps1` 被执行策略拦截，可以使用：
 
-```bash
-pnpm dev:api
+```powershell
+pnpm.cmd install
 ```
 
-启动前端：
+---
+
+### 2. 安装 Python 后端依赖
 
 ```bash
-pnpm dev:web -- --port 18340
+cd apps/api_py
+python -m pip install -e ".[dev]"
 ```
 
-访问：
+---
+
+### 3. 启动 Python/FastAPI 主后端
+
+在项目根目录运行：
+
+```bash
+pnpm run dev:api-py
+```
+
+或者进入 Python API 目录运行：
+
+```bash
+cd apps/api_py
+python -m uvicorn app.main:create_app --factory --reload
+```
+
+默认访问：
 
 ```text
-http://localhost:18340
+http://127.0.0.1:8000
 ```
-
-说明：
-
-- 后端默认端口是 `3001`。
-- 前端建议使用 `18340`。
-- 如果 Vite 自动切换端口，请以终端实际输出为准。
 
 健康检查：
 
 ```bash
-curl http://localhost:3001/health
+curl http://127.0.0.1:8000/health
+curl http://127.0.0.1:8000/api/v2/health
 ```
 
-## 10. 常用验证命令
+---
+
+### 4. 启动前端
 
 ```bash
-pnpm typecheck
-pnpm build
-pnpm benchmark
-pnpm zk:setup
-pnpm zk:demo
-pnpm contract:compile
-pnpm contract:test
+pnpm run dev:web
 ```
 
-## 11. ZK 使用说明
-
-VeriVote 当前 ZK 模块用于证明单张 `voteVector` 是合法 one-hot 向量：每个元素为 `0/1`，且所有元素之和为 `1`。
-
-### Mock ZK
-
-Mock ZK 无需 Circom，也无需本地 ZK artifacts。启动 API 和 Web 后，在前端 `ZK 验证` 页面选择：
-
-```text
-Mock ZK Validity Proof
-```
-
-Mock proof 会检查 one-hot 规则，但它不是密码学意义上的零知识证明，主要用于快速演示接口、失败路径和前端流程。
-
-### Real Groth16 ZK
-
-Real 模式需要先安装 Circom 2，并确保命令行可以执行：
+如果需要指定 Vite 端口：
 
 ```bash
-circom --version
+pnpm run dev:web -- --port 18340
 ```
 
-生成本地 ZK artifacts：
+---
+
+## Python/FastAPI 主后端
+
+`apps/api_py` 是当前主后端。
+
+安装：
 
 ```bash
-pnpm zk:setup
+cd apps/api_py
+python -m pip install -e ".[dev]"
 ```
-
-运行命令行 demo：
-
-```bash
-pnpm zk:demo
-```
-
-再启动：
-
-```bash
-pnpm dev:api
-pnpm dev:web -- --port 18340
-```
-
-在前端选择：
-
-```text
-Real Groth16 ZK Proof
-```
-
-当前 Real Groth16 电路位于 `circuits/valid_vote.circom`，约束固定长度为 4 的 `voteVector`：
-
-```text
-vi * (vi - 1) = 0
-v0 + v1 + v2 + v3 = 1
-```
-
-说明：当前 Real ZK 证明的是 `voteVector` one-hot 合法性，不是完整 tally proof，也没有生成或部署 Solidity verifier。
-
-## 12. 链上审计说明
-
-系统支持两种链上审计模式。
-
-### Mock Chain Audit
-
-Mock Chain Audit 可以直接在页面使用，用于快速演示链上审计摘要的提交和查询流程，不需要启动本地链。
-
-### Hardhat Audit
-
-准备 Hardhat 合约和本地链：
-
-```bash
-pnpm contract:compile
-pnpm contract:test
-pnpm contract:node
-pnpm contract:deploy
-```
-
-然后根据部署输出配置 API 环境变量：
-
-```bash
-BLOCKCHAIN_AUDIT_MODE=hardhat
-HARDHAT_RPC_URL=http://127.0.0.1:8545
-AUDIT_CONTRACT_ADDRESS=部署输出的合约地址
-```
-
-再启动 API 和 Web：
-
-```bash
-pnpm dev:api
-pnpm dev:web -- --port 18340
-```
-
-说明：
-
-- 当前是本地 Hardhat 链，不是主网部署。
-- 链上审计提交的是 `merkleRoot`、`commitmentRoot`、`receiptRoot`、`auditHash`、`tallyHash` 等摘要。
-- 不会上链明文选票，也不等同于完整 zk-SNARK 链上 verifier。
-
-## 13. Benchmark 性能评估
 
 运行：
 
 ```bash
-pnpm benchmark
+python -m uvicorn app.main:create_app --factory --reload
 ```
 
-会生成或更新：
+测试：
 
-- `benchmark-results.json`
-- `benchmark-results.csv`
-- `docs/BENCHMARK.md`
+```bash
+python -m pytest
+python -m ruff check app
+```
 
-前端性能评估页面展示：
+根目录快捷命令：
 
-- `totalMs` 趋势
-- 模块耗时对比
-- 100 / 1000 / 5000 / 10000 votes 测试结果
+```bash
+pnpm run test:py-api
+pnpm run lint:py-api
+```
 
-当前 benchmark 主要覆盖本地内存流程，包括 commitment 生成、Merkle Root 构建、Merkle proof 抽样生成与验证、聚合器统计和审计哈希生成。它不包含 API、Web、智能合约链上交易或 ZK proof 的真实耗时。
-
-## 14. 当前边界
-
-需要明确的是，VeriVote 仍是比赛原型和工程验证项目，当前边界包括：
-
-- 当前后端默认仍是内存模式，可通过 `VERIVOTE_PERSISTENCE=sqlite` 切换到 SQLite 持久化。
-- Real ZK 已支持 **单票合法性** 和 **批次计票正确性 (8x4)** 两个电路。更大批次和链上 Solidity verifier 仍待办。
-- Pedersen-style commitment 作为实验模块提供（`/crypto/pedersen/*`），不替换主流程的 SHA-256 承诺。
-- `zk-artifacts/` 不提交到 Git，需要本地运行 `pnpm zk:setup` 生成（含 valid_vote + tally_correctness）。
-- Hardhat 链上审计是本地测试链，不是主网部署。
-- 异常 / 攻击检测模块用于审计验证和防御演示，不用于真实攻击。
-- 当前 Aggregator 是工程化聚合审计；`tally_correctness` ZK 证明可通过 `submitAuditWithTallyProof` 走链上 Groth16 verifier 验证，但还不是完整 Aggios EPA proof。
-- 当前项目是比赛原型，不是生产级电子投票系统。
-
-## 15. 后续计划
-
-本轮已落地的子项已从计划移到对应文档（见「相关文档」小节）。
-
-### 已落地（本轮）
-
-- **Pedersen 承诺实验模块**：独立的 opening verification / aggregate verification，不替换 SHA-256 主流程（`docs/PEDERSEN_EXPERIMENT.md`）。
-- **SECURITY_TESTS.md 安全测试矩阵**：八大威胁 + 横向项（`docs/SECURITY_TESTS.md`）。
-- **Zeeperio 风格 artifact export**：`bulletin_board.json` / `aggregator_report.json` / `zk_summary.json` / `chain_audit.json` / `public_inputs.json` 分文件下载，以及合并 `bundle.json`。
-- **批次计票正确性 ZK 证明**：`tally_correctness.circom` + `createTallyCorrectnessProof` + `/zk/prove-tally-correctness`（`docs/TALLY_CORRECTNESS_PROOF.md`）。
-- **SQLite 可选持久化**：通过环境变量 `VERIVOTE_PERSISTENCE=auto|memory|sqlite` 切换。
-- **Docker / docker-compose 一键启动**：`Dockerfile.api` + `Dockerfile.web` + `docker-compose.yml`。
-- **GitHub Actions**：`.github/workflows/ci.yml`（typecheck + build + hardhat test + benchmark）和 `.github/workflows/zk.yml`（circom/snarkjs smoke test）。
-- **服务化部署文档**：`docs/DEPLOYMENT.md`（Docker / systemd / Nginx / Kubernetes）。
-- **Solidity verifier 挂链**：`VeriVoteAudit.submitAuditWithTallyProof` + auto-generated `TallyVerifier.sol` + `MockTallyVerifier`（见 `docs/ON_CHAIN_VERIFIER.md`），评委可看到真正的链上 Groth16 验证。
-
-### 仍待办
-
-1. **把 `electionIdHash` 绑进 ZK 电路 publicSignals**，消除 API 层和链上 verifier 之间的 proof 绑定缝。
-2. **`valid_vote` 单票电路也导出 Solidity verifier**，提供 per-ballot 上链验证路径；`tally_correctness` 路径已完成（见 `docs/ON_CHAIN_VERIFIER.md`）。
-3. **SECURITY_TESTS 自动化**（vitest / playwright）。
-4. **选民身份白名单 + 签名**，堵「随机注册 userId → 绕过 tokenHash」。
-5. **更大批次 / 动态候选人数**：`TallyCorrectness(N, C)` 模板化 + padding。
-6. **报告 / PPT / 演示脚本**：单独产出 `docs/DEMO_SCRIPT.md` 和架构图 / 论文关系图。
-
-## 16. 开发注意事项
-
-每完成一个阶段后，建议：
-
-1. `pnpm typecheck`
-2. `pnpm build`
-3. `git commit`
-4. `git push origin main`
-5. 关闭后端 `3001` 和前端 `18340`
-
-关闭本地服务可以使用 PowerShell：
+Windows 推荐：
 
 ```powershell
-$ports = @(3001, 18340, 5173)
+pnpm.cmd run test:py-api
+pnpm.cmd run lint:py-api
+```
 
-foreach ($port in $ports) {
-  $listeners = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue
-  foreach ($conn in $listeners) {
-    if ($conn.OwningProcess -ne 0) {
-      Stop-Process -Id $conn.OwningProcess -Force
-    }
-  }
+---
+
+## ABP v2 投票流程
+
+当前 ABP v2 的 reference/demo 投票流程：
+
+```text
+1. 创建 election
+2. 添加 candidates
+3. demo issue credential
+4. 生成 credential_commitment
+5. 更新 eligibility_root
+6. derive nullifier_hash
+7. 生成 vote_vector 与 randomness
+8. 计算 commitment
+9. 生成 sealedVotePackage
+10. 提交 /ballots/cast
+11. bulletin-board 公开 public cast record
+12. nullifier_hash 防重复 cast
+```
+
+当前 real-ZK 流程：
+
+```text
+1. 使用 Poseidon input generator 生成 witness input
+2. build private_valid_vote circuit
+3. generate witness
+4. groth16 prove
+5. groth16 verify
+6. Python wrapper 检测真实 verifier artifacts
+```
+
+下一阶段 M7 将把真实 proof 更严格地接入 cast API。
+
+---
+
+## Private Valid Vote ZK Proof
+
+### 电路文件
+
+```text
+circuits/private_valid_vote.circom
+circuits/private_valid_vote_4_8.circom
+```
+
+### 输入生成器
+
+```text
+scripts/zk/generate_private_valid_vote_input.mjs
+```
+
+生成：
+
+```text
+circuits/inputs/private_valid_vote.valid.json
+circuits/inputs/private_valid_vote.invalid_overvote.json
+circuits/inputs/private_valid_vote.invalid_membership.json
+artifacts/zk/private_valid_vote/public_signals_expected.json
+```
+
+### PowerShell 脚本
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/zk/build_private_valid_vote.ps1
+powershell -ExecutionPolicy Bypass -File scripts/zk/prove_private_valid_vote.ps1
+powershell -ExecutionPolicy Bypass -File scripts/zk/verify_private_valid_vote.ps1
+```
+
+### 生成 artifacts
+
+```text
+artifacts/zk/private_valid_vote/
+├── private_valid_vote.r1cs
+├── private_valid_vote.sym
+├── private_valid_vote_js/
+├── private_valid_vote.zkey
+├── verification_key.json
+├── witness.wtns
+├── proof.json
+└── public.json
+```
+
+### 验证命令
+
+```bash
+pnpm exec snarkjs groth16 verify \
+  artifacts/zk/private_valid_vote/verification_key.json \
+  artifacts/zk/private_valid_vote/public.json \
+  artifacts/zk/private_valid_vote/proof.json
+```
+
+Windows：
+
+```powershell
+pnpm.cmd exec snarkjs groth16 verify `
+  artifacts/zk/private_valid_vote/verification_key.json `
+  artifacts/zk/private_valid_vote/public.json `
+  artifacts/zk/private_valid_vote/proof.json
+```
+
+成功时输出：
+
+```text
+snarkJS: OK!
+```
+
+---
+
+## API 概览
+
+### Health
+
+```http
+GET /health
+GET /api/v1/legacy/health
+GET /api/v2/health
+```
+
+### Election
+
+```http
+POST /api/v2/elections
+POST /api/v2/elections/{election_id}/candidates
+```
+
+### Demo Credential
+
+```http
+POST /api/v2/elections/{election_id}/credentials/demo-issue
+GET  /api/v2/elections/{election_id}/credentials/public
+POST /api/v2/elections/{election_id}/credentials/derive-nullifier
+```
+
+### Ballot
+
+```http
+POST /api/v2/elections/{election_id}/ballots/legacy-cast
+POST /api/v2/elections/{election_id}/ballots/cast
+```
+
+说明：
+
+* `legacy-cast` 是迁移期 simple endpoint；
+* `/ballots/cast` 是 ABP v2 reference/demo cast path；
+* 后续 M7 会新增或强化 real-proof cast path；
+* proofless cast path 后续应逐步废弃。
+
+### Bulletin Board
+
+```http
+GET /api/v2/elections/{election_id}/bulletin-board
+```
+
+返回 public cast records，不返回：
+
+* full sealed vote package
+* vote vector
+* randomness
+* candidate id
+* credential secret
+
+### ZK Status
+
+```http
+GET /api/v2/zk/private-valid-vote/status
+```
+
+典型返回字段：
+
+```json
+{
+  "configured": true,
+  "zk_profile": "poseidon-v1",
+  "circuit": "private_valid_vote_4_8",
+  "verifier_artifact_present": true,
+  "snarkjs_available": true,
+  "mock_mode": false,
+  "real_verifier_available": true,
+  "warning": "SHA reference hash and Poseidon circuit profile alignment is pending"
 }
 ```
 
+---
+
+## 测试与验证
+
+### Python API
+
+```bash
+cd apps/api_py
+python -m pytest
+python -m ruff check app
+```
+
+根目录：
+
+```bash
+pnpm run test:py-api
+pnpm run lint:py-api
+```
+
+Windows：
+
+```powershell
+pnpm.cmd run test:py-api
+pnpm.cmd run lint:py-api
+```
+
+当前最近一次已知验证结果：
+
+```text
+python -m pytest              107 passed
+python -m ruff check app      passed
+pnpm.cmd run test:py-api      107 passed
+pnpm.cmd run lint:py-api      passed
+```
+
+### Legacy / Workspace Tests
+
+```bash
+pnpm run test:api
+pnpm run test:crypto
+pnpm run test:zk
+pnpm run test:contract
+```
+
+聚合命令：
+
+```bash
+pnpm test
+```
+
+如果聚合命令在本地超时，迁移期优先使用 targeted tests。
+
+---
+
+## ZK 本地运行命令
+
+### 依赖检查
+
+```bash
+circom --version
+pnpm exec snarkjs --help
+node -e "console.log(require.resolve('circomlib'))"
+node -e "import('circomlibjs').then(()=>console.log('circomlibjs ok'))"
+```
+
+Windows：
+
+```powershell
+circom --version
+pnpm.cmd exec snarkjs --help
+node -e "console.log(require.resolve('circomlib'))"
+node -e "import('circomlibjs').then(()=>console.log('circomlibjs ok'))"
+```
+
+### 安装 ZK 依赖
+
+```bash
+pnpm add -D snarkjs circomlib circomlibjs
+```
+
+如果在 workspace root 安装：
+
+```bash
+pnpm add -Dw snarkjs circomlib circomlibjs
+```
+
+### 运行 private valid vote pipeline
+
+```powershell
+node scripts/zk/generate_private_valid_vote_input.mjs
+
+powershell -ExecutionPolicy Bypass -File scripts/zk/build_private_valid_vote.ps1
+powershell -ExecutionPolicy Bypass -File scripts/zk/prove_private_valid_vote.ps1
+powershell -ExecutionPolicy Bypass -File scripts/zk/verify_private_valid_vote.ps1
+```
+
+---
+
+## 安全边界与当前限制
+
+当前已经明确区分 real path、mock path、reference path。
+
+### 已完成的安全边界
+
+* cast ballot 不公开 `vote_vector`；
+* cast ballot 不公开 `randomness`；
+* cast ballot 不保存 `candidate_id`；
+* public credentials 不公开 `credential_secret`；
+* bulletin board 不公开 sealed package 全量内容；
+* nullifier 防重复投票；
+* mock ZK 不允许在 production / competition 中 fallback；
+* real private valid vote proof pipeline 已能 build/prove/verify。
+
+### 当前仍然是 demo/reference/unsafe 的部分
+
+1. `field_hash_v2` 是 SHA256-to-BN254 reference hash；
+2. Python reference commitment 与 Poseidon circuit profile 尚未完全统一；
+3. 当前 Powers of Tau / zkey 是本地 unsafe development setup；
+4. fixture values 是 deterministic demo；
+5. `/ballots/cast` 仍保留 proofless migration path；
+6. sealed vote package opening 与 proof witness 的动态绑定还需要 M7/M8 继续完善；
+7. batch tally proof 尚未实现；
+8. Solidity on-chain verifier 尚未接入 ABP proof public signals；
+9. coercion-resistance 不在当前版本安全声明范围内。
+
+---
+
+## 后续路线图
+
+### M7：cast API 接入真实 private valid vote proof
+
+目标：
+
+* 新增或强化 real-proof cast endpoint；
+* 拒绝 mock proof；
+* 调用真实 `snarkjs groth16 verify`；
+* 将 proof public signals 与 election/cast request 绑定；
+* 保留 reference cast path 作为迁移期路径；
+* 明确 SHA reference profile 与 Poseidon real-proof profile 的边界。
+
+### M8：cast-or-challenge 与 receipt chain 完整化
+
+目标：
+
+* pending ballot；
+* cast / challenge 双路径；
+* challenge opening 公开但不计票；
+* receipt chain 模块化；
+* receipt root 生成。
+
+### M9：AuditBundleV2 与 offline verifier
+
+目标：
+
+* 生成完整 audit bundle；
+* 包含 manifest、roots、public cast records、challenge records、proof metadata；
+* 离线 verifier 复算 roots 和 hashes；
+* 明确不包含 credential secret / decrypted openings。
+
+### M10：batch tally reference checker
+
+目标：
+
+* 解密 sealed packages；
+* 计算 tally；
+* 校验 cast set；
+* 生成 tally hash；
+* 为 batch tally circuit 准备 witness。
+
+### M11：batch_tally_bound.circom
+
+目标：
+
+* 批量计票证明；
+* public signals 绑定 election、manifest、commitmentRoot、nullifierRoot、receiptRoot、tallyHash；
+* 为 Solidity verifier 做 public input 对齐。
+
+### M12：tally service with proof
+
+目标：
+
+* 后端接入 batch tally proof；
+* 生成 proof artifacts；
+* 写入 audit bundle。
+
+### M13：Solidity BoundAudit
+
+目标：
+
+* 部署链上 verifier / audit registry；
+* 校验 proof public signals 与提交字段一致；
+* 记录 audit commitment。
+
+### M14：Python web3.py submit-chain
+
+目标：
+
+* Python 后端提交 audit bundle hash；
+* 获取 transaction hash；
+* 查询链上记录。
+
+### M15：adversarial election corpus
+
+目标：
+
+* 构造攻击数据集；
+* 包括 duplicate nullifier、tampered commitment、bad receipt chain、bad tally、invalid proof、wrong root 等。
+
+### M16：RQ benchmark and ablation
+
+目标：
+
+* RQ1 有效性；
+* RQ2 安全攻击检测；
+* RQ3 proof 开销；
+* RQ4 可扩展性；
+* RQ5 消融实验；
+* RQ6 链上 gas 和 audit bundle size。
+
+### M17：frontend ABP v2 demo
+
+目标：
+
+* 展示 election；
+* demo credential；
+* cast；
+* bulletin board；
+* ZK status；
+* audit bundle；
+* attack lab；
+* proof verification state。
+
+### M18：production guard and final gap report
+
+目标：
+
+* 禁用 mock production；
+* 输出 final gap report；
+* 明确哪些是 demo/reference；
+* 准备比赛报告和答辩材料。
+
+---
+
 ## 相关文档
 
-- `docs/PAPER_MAPPING.md`：三篇论文与 VeriVote 工程模块的映射。
-- `docs/FRIEND_PROJECT_ANALYSIS.md`：朋友项目机制分析与融合边界。
-- `docs/FUSION_ROADMAP.md`：后续分阶段融合路线。
-- `docs/ZK_VALIDITY_PROOF.md`：Mock / Real ZK validity proof 说明。
-- `docs/REAL_ZK_DEMO.md`：Real Groth16 ZK demo 使用说明。
-- `docs/BENCHMARK.md`：benchmark 结果与指标解释。
-- `docs/SECURITY_TESTS.md`：安全测试矩阵（8 大威胁 + 横向项）。
-- `docs/PEDERSEN_EXPERIMENT.md`：Pedersen 风格承诺实验模块说明。
-- `docs/TALLY_CORRECTNESS_PROOF.md`：批次计票正确性 ZK 证明（8 x 4 电路）。
-- `docs/ON_CHAIN_VERIFIER.md`：Solidity verifier 挂链说明（真 Groth16 + MockTallyVerifier）。
-- `docs/DEPLOYMENT.md`：Docker、systemd、Nginx、Kubernetes 部署指南。
+建议阅读顺序：
+
+1. `docs/VERIVOTE_ABP_SPEC.md`
+2. `docs/API_V2.md`
+3. `docs/ZK_PRIVATE_VALID_VOTE.md`
+4. `docs/THREAT_MODEL_V2.md`
+5. `docs/PY_BACKEND_MIGRATION.md`
+6. `docs/TESTING.md`
+7. `docs/ROADMAP_GUOYI.md`
+8. `scripts/zk/README.md`
+9. `circuits/README.md`
+
+---
+
+## 开发环境建议
+
+推荐环境：
+
+* Windows 11 + PowerShell
+* Node.js 20+
+* pnpm 10+
+* Python 3.11+
+* Circom 2.2+
+* snarkjs 0.7+
+* circomlib 2+
+* circomlibjs 0.1+
+* Rust toolchain，用于安装 Circom
+
+---
+
+## 竞赛/研究说明
+
+VeriVote-ABP 当前是一个用于信息安全竞赛和研究展示的系统原型。它强调：
+
+* 可验证投票；
+* 隐私保护；
+* 公开审计；
+* ZK 合法性证明；
+* 工程可运行；
+* 文档与测试可复现；
+* demo/reference/real path 清晰区分。
+
+项目不会声称当前版本已经达到生产级电子投票系统要求。所有 demo issuer、unsafe setup、reference hash、mock path 都会在文档中明确标记，并逐步替换为真实安全组件。
+
+---
+
+## License
+
+当前仓库尚未声明正式开源许可证。若需要公开复用，请先补充 LICENSE 文件。
